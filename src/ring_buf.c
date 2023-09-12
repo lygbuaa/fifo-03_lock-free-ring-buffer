@@ -1,107 +1,106 @@
 /**
-* @file
-* @brief Lock-free ring buffer
+ * @file    hlgih_sal_ringbuf.c
+ * @brief   Provides an ringbuf template
+ * @details Provides an ringbuf template
+ * @author  lygbuaa@gmail.com
+ * @version 0.1.0
+ * @date    2023-07-04
+ * @copyright Copyright (C) 2018-2023, Hugo-Liu-Gmail. All rights reserved.
+ *
+ * @par changes:
+ * <table>
+ * <tr><th>Date        <th>Version  <th>Author    <th>Description
+ * <tr><td>2023/07/01  <td>0.1.0    <td>Hugo Liu  <td>create initial version
+ * </table>
+ *
 */
-/*****************************************************************************
-* Last updated on  2021-03-02
-*
-*                    Q u a n t u m  L e a P s
-*                    ------------------------
-*                    Modern Embedded Software
-*
-* Copyright (C) 2021 Quantum Leaps, LLC. All rights reserved.
-*
-* This software is licensed under the following open source MIT license:
-*
-* Permission is hereby granted, free of charge, to any person obtaining
-* a copy of this software and associated documentation files (the "Software"),
-* to deal in the Software without restriction, including without limitation
-* the rights to use, copy, modify, merge, publish, distribute, sublicense,
-* and/or sell copies of the Software, and to permit persons to whom the
-* Software is furnished to do so, subject to the following conditions:
-*
-* The above copyright notice and this permission notice shall be included
-* in all copies or substantial portions of the Software.
-*
-* THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS
-* OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
-* FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL
-* THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
-* LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
-* FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
-* DEALINGS IN THE SOFTWARE.
-*
-* Contact information:
-* <www.state-machine.com>
-* <info@state-machine.com>
-*/
-#include <stdint.h>
-#include <stdbool.h>
 
 #include "ring_buf.h"
 
 /*..........................................................................*/
-void RingBuf_ctor(RingBuf * const me,
-                  RingBufElement sto[], RingBufCtr sto_len) {
-    me->buf  = &sto[0];
-    me->end  = sto_len;
-    me->head = 0U;
-    me->tail = 0U;
+void HLGIH_SAL_RingBuf_Create(SAL_RINGBUF_HANDLE const self, SAL_RINGBUF_CELL_S sto[], ringbuf_index_t sto_len)
+{
+    self->buf  = &sto[0];
+    self->end  = sto_len;
+    self->head = 0U;
+    self->tail = 0U;
 }
+
+// SAL_RINGBUF_HANDLE HLGIH_SAL_RingBuf_Create(ringbuf_index_t size)
+// {
+//     SAL_RINGBUF_HANDLE = (SAL_RINGBUF_HANDLE) malloc(sizeof(struct SAL_RINGBUF_S));
+// }
+
 /*..........................................................................*/
-bool RingBuf_put(RingBuf * const me, RingBufElement const el) {
-    RingBufCtr head = me->head + 1U;
-    if (head == me->end) {
+bool HLGIH_SAL_RingBuf_Write(SAL_RINGBUF_HANDLE const self, SAL_RINGBUF_CELL_S const el)
+{
+    ringbuf_index_t head = self->head + 1U;
+    if (head == self->end) {
         head = 0U;
     }
-    if (head != me->tail) { /* buffer NOT full? */
-        me->buf[me->head] = el;
-        me->head = head; /* update the head to a *valid* index */
-        return true;  /* element placed in the buffer */
+    /** buffer not full? */
+    if (head != self->tail) { 
+        self->buf[self->head] = el;
+        /** update the head to a valid index */
+        self->head = head; 
+        /** element placed in the buffer */
+        return true;  
     }
     else {
-        return false; /* element NOT placed in the buffer */
+        /** element not placed in the buffer */
+        return false; 
     }
 }
+
 /*..........................................................................*/
-bool RingBuf_get(RingBuf * const me, RingBufElement *pel) {
-    RingBufCtr tail = me->tail;
-    if (me->head != tail) { /* ring buffer NOT empty? */
-        *pel = me->buf[tail];
+bool HLGIH_SAL_RingBuf_Read(SAL_RINGBUF_HANDLE const self, SAL_RINGBUF_CELL_S* const pel)
+{
+    ringbuf_index_t tail = self->tail;
+    /** ring buffer not empty? */
+    if (self->head != tail) { 
+        *pel = self->buf[tail];
         ++tail;
-        if (tail == me->end) {
+        if (tail == self->end) {
             tail = 0U;
         }
-        me->tail = tail; /* update the tail to a *valid* index */
+        /** update the tail to a valid index */
+        self->tail = tail; 
         return true;
     }
     else {
         return false;
     }
 }
+
 /*..........................................................................*/
-void RingBuf_process_all(RingBuf * const me, RingBufHandler handler) {
-    RingBufCtr tail = me->tail;
-    while (me->head != tail) { /* ring buffer NOT empty? */
-        (*handler)(me->buf[tail]);
-        ++tail;
-        if (tail == me->end) {
-            tail = 0U;
-        }
-        me->tail = tail; /* update the tail to a *valid* index */
-    }
-}
-/*..........................................................................*/
-RingBufCtr RingBuf_num_free(RingBuf * const me) {
-    RingBufCtr head = me->head;
-    RingBufCtr tail = me->tail;
-    if (head == tail) { /* buffer empty? */
-        return (RingBufCtr)(me->end - 1U);
+ringbuf_index_t HLGIH_SAL_RingBuf_GetFreeSlots(SAL_RINGBUF_HANDLE const self)
+{
+    ringbuf_index_t head = self->head;
+    ringbuf_index_t tail = self->tail;
+    /* if buffer empty? */
+    if (head == tail) {
+        return (ringbuf_index_t)(self->end - 1U);
     }
     else if (head < tail) {
-        return (RingBufCtr)(tail - head - 1U);
+        return (ringbuf_index_t)(tail - head - 1U);
     }
     else {
-        return (RingBufCtr)(me->end + tail - head - 1U);
+        return (ringbuf_index_t)(self->end + tail - head - 1U);
+    }
+}
+
+/*..........................................................................*/
+void HLGIH_SAL_RingBuf_ProcessAll(SAL_RINGBUF_HANDLE const self, HLGIH_SAL_RingBuf_Process_Handler handler) 
+{
+    ringbuf_index_t tail = self->tail;
+    /** ring buffer not empty? */
+    while (self->head != tail) {
+        (*handler)(self->buf[tail]);
+        ++tail;
+        if (tail == self->end) {
+            tail = 0U;
+        }
+        /** update the tail to a valid index */
+        self->tail = tail;
     }
 }

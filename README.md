@@ -23,7 +23,7 @@ src directory:
 - ring_buf.h  - contains the interface
 - ring_buf.c  - contains the implementation
 
-The ring buffer holds elements of they type RingBufElement, which
+The ring buffer holds elements of they type SAL_RINGBUF_CELL_S, which
 can be customized (typically uint8_t, uint16_t, uint32_t, float, etc.)
 
 ---------------------------------------------------------------------
