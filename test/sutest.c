@@ -37,13 +37,13 @@
 */
 #include "sutest.h"
 
-#include <stdio.h>  /* for printf_s() */
+#include <stdio.h>  /* for printf() */
 #include <stdlib.h> /* for exit() */
 
-#ifndef NDEBUG
-#define WIN32_LEAN_AND_MEAN
-#include <windows.h> /* for DebugBreak() */
-#endif
+// #ifndef NDEBUG
+// #define WIN32_LEAN_AND_MEAN
+// #include <windows.h> /* for DebugBreak() */
+// #endif
 
 /*..........................................................................*/
 static int l_test_count;
@@ -51,38 +51,38 @@ static int l_test_count;
 /*..........................................................................*/
 void TEST(char const *title) {
     if (l_test_count > 0) {
-        printf_s(" PASSED\n");
+        printf(" PASSED\n");
     }
-    printf_s("test: \"%s\" ...", title);
+    printf("test: \"%s\" ...", title);
     ++l_test_count;
 }
 
 /*..........................................................................*/
 void TEST_fail_(char const *cond, char const *file, int line) {
-    printf_s(" FAILED in %s:%d\n"
+    printf(" FAILED in %s:%d\n"
         "%s\n"
         "---------------------------------------------\n"
         "%d test(s)\n"
         "FAILED\n",
         file, line, cond, l_test_count);
 
-#ifndef NDEBUG
-    DebugBreak();
-#endif
+// #ifndef NDEBUG
+//     DebugBreak();
+// #endif
 
     exit(l_test_count);
 }
 
 /*..........................................................................*/
 int main(void) {
-    printf_s("\n%s\n", "Simple Unit Internal Testing -- SUTEST");
+    printf("\n%s\n", "Simple Unit Internal Testing -- SUTEST");
 
     TEST_onRun();
 
     if (l_test_count > 0) {
-        printf_s("%s\n", " PASSED");
+        printf("%s\n", " PASSED");
     }
-    printf_s("---------------------------------------------\n"
+    printf("---------------------------------------------\n"
         "%d test(s)\nOK\n", l_test_count);
 
     return 0; /* success */
