@@ -80,13 +80,13 @@ CPPFLAGS := -c -g -O -fno-pie -std=c++11 -pedantic -Wall -Wextra \
 	$(INCLUDES) $(DEFINES) -DQ_HOST
 
 ifndef GCC_OLD
-	LINKFLAGS := -no-pie
+	LINKFLAGS := -no-pie -lpthread
 endif
 
 ifdef GCOV
 	CFLAGS    += -fprofile-arcs -ftest-coverage
 	CPPFLAGS  += -fprofile-arcs -ftest-coverage
-	LINKFLAGS += -lgcov --coverage
+	LINKFLAGS += -lgcov --coverage -lpthread
 endif
 
 #-----------------------------------------------------------------------------

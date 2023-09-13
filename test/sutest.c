@@ -77,7 +77,16 @@ void TEST_fail_(char const *cond, char const *file, int line) {
 int main(void) {
     printf("\n%s\n", "Simple Unit Internal Testing -- SUTEST");
 
-    TEST_onRun();
+    TEST_single_thread();
+
+    if (l_test_count > 0) {
+        printf("%s\n", " PASSED");
+    }
+    printf("---------------------------------------------\n"
+        "%d test(s)\nOK\n", l_test_count);
+
+    l_test_count = 0;
+    TEST_multi_thread();
 
     if (l_test_count > 0) {
         printf("%s\n", " PASSED");

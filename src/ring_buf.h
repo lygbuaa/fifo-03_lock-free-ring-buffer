@@ -18,7 +18,6 @@
 #ifndef __HLGIH_SAL_RING_BUF_H__
 #define __HLGIH_SAL_RING_BUF_H__
 
-#include <stdalign.h>
 #include <stdint.h>
 #include <stddef.h>
 #include <stdbool.h>
@@ -27,41 +26,44 @@
 extern "C" {
 #endif
 
-typedef uint32_t ringbuf_index_t;
-typedef uint8_t SAL_RINGBUF_CELL_S;
+#define HLGIH_SAL_RINGBUF_MAX_LENGTH        (16)
+#define HLGIH_SAL_RINGBUF_MAX_PAYLOAD_SIZE  (8*1024*1024)
+#define HLGIH_SAL_RINGBUF_CELL_MAGIC_NUM    (0x72696e67)
 
-// typedef struct hlgih_SAL_RINGBUF_CELL_S
-// {
-//     uint32_t magic;         /**< magic number to identify a ringbuf cell, default to 0x72696e67 */
-//     uint32_t len;           /**< length of the payload, in bytes */
-//     int64_t timestamp;      /**< timestamp when the payload received */
-//     uint8_t* payload;       /**< payload address */
-// } SAL_RINGBUF_CELL_S;
+typedef uint8_t  ringbuf_payload_t;
 
-typedef struct hlgih_SAL_RINGBUF_S
+typedef struct hlgih_SAL_RINGBUF_CELL_S
 {
-    SAL_RINGBUF_CELL_S     *buf;     /**< pointer to the start of the ring buffer */
-    ringbuf_index_t         end;     /**< offset of the end of the ring buffer */
-    ringbuf_index_t         head;    /**< offset to where next byte will be inserted */
-    ringbuf_index_t         tail;    /**< offset of where next byte will be extracted */
-} SAL_RINGBUF_S;
+    uint32_t magic;                     /**< magic number to identify a ringbuf cell, default to 0x72696e67 */
+    uint32_t size;                      /**< total size of the payload, in bytes */
+    uint32_t len;                       /**< used bytes of the payload */
+    int64_t timestamp;                  /**< timestamp when the payload received */
+    ringbuf_payload_t* payload;         /**< payload address */
+} SAL_RINGBUF_CELL_S;
+// typedef uint8_t SAL_RINGBUF_CELL_S;
 
-typedef SAL_RINGBUF_S *SAL_RINGBUF_HANDLE;
+typedef SAL_RINGBUF_CELL_S *SAL_RINGBUF_CELL_HANDLE;
+typedef struct SAL_RINGBUF_S *SAL_RINGBUF_HANDLE;
 
-typedef void (*HLGIH_SAL_RingBuf_Process_Handler) (SAL_RINGBUF_CELL_S const el);
+bool HLGIH_SAL_RingBuf_Create(SAL_RINGBUF_HANDLE *rb, const uint32_t len, const uint32_t payload_size);
 
-void HLGIH_SAL_RingBuf_Create(SAL_RINGBUF_HANDLE const self, SAL_RINGBUF_CELL_S sto[], ringbuf_index_t sto_len);
-// SAL_RINGBUF_HANDLE HLGIH_SAL_RingBuf_Create(ringbuf_index_t size);
+bool HLGIH_SAL_RingBuf_Release(SAL_RINGBUF_HANDLE const self);
 
-void HLGIH_SAL_RingBuf_Release(SAL_RINGBUF_HANDLE const self);
+bool HLGIH_SAL_RingBuf_IsEmpty(SAL_RINGBUF_HANDLE const self);
 
-bool HLGIH_SAL_RingBuf_Write(SAL_RINGBUF_HANDLE const self, SAL_RINGBUF_CELL_S const el);
+bool HLGIH_SAL_RingBuf_IsFull(SAL_RINGBUF_HANDLE const self);
 
-bool HLGIH_SAL_RingBuf_Read(SAL_RINGBUF_HANDLE const self, SAL_RINGBUF_CELL_S *pel);
+bool HLGIH_SAL_RingBuf_Clear(SAL_RINGBUF_HANDLE const self);
 
-ringbuf_index_t HLGIH_SAL_RingBuf_GetFreeSlots(SAL_RINGBUF_HANDLE const self);
+bool HLGIH_SAL_RingBuf_GetWriteCell(SAL_RINGBUF_HANDLE const self, const int64_t timeout_us, SAL_RINGBUF_CELL_HANDLE* const el);
 
-void HLGIH_SAL_RingBuf_ProcessAll(SAL_RINGBUF_HANDLE const self, HLGIH_SAL_RingBuf_Process_Handler handler);
+bool HLGIH_SAL_RingBuf_ReturnWriteCell(SAL_RINGBUF_HANDLE const self, SAL_RINGBUF_CELL_HANDLE const el);
+
+bool HLGIH_SAL_RingBuf_GetReadCell(SAL_RINGBUF_HANDLE const self, const int64_t timeout_us, SAL_RINGBUF_CELL_HANDLE* const el);
+
+bool HLGIH_SAL_RingBuf_ReturnReadCell(SAL_RINGBUF_HANDLE const self, SAL_RINGBUF_CELL_HANDLE const el);
+
+bool HLGIH_SAL_RingBuf_GetFreeSlotsCount(SAL_RINGBUF_HANDLE const self, uint32_t* count);
 
 #ifdef __cplusplus
 }

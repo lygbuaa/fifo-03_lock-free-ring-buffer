@@ -49,7 +49,10 @@ extern "C" {
 
 void TEST(char const *title);
 void TEST_fail_(char const *cond, char const *module, int line);
-void TEST_onRun(void); /* user-defined callback to run the tests */
+/** test ringbuf with single thread */
+void TEST_single_thread(void);
+/** test ringbuf with multi thread */
+void TEST_multi_thread(void);
 
 #ifdef __cplusplus
 }
