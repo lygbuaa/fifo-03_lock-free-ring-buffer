@@ -1,7 +1,7 @@
 /**
  * @file    hlgih_sal_ringbuf.c
- * @brief   Provides an ringbuf template
- * @details Provides an ringbuf template
+ * @brief   Provides an single producer single consumer ringbuf template
+ * @details Provides an single producer single consumer ringbuf template
  * @author  lygbuaa@gmail.com
  * @version 0.1.0
  * @date    2023-07-04
@@ -36,7 +36,7 @@
  */
 typedef sig_atomic_t ringbuf_index_t;
 
-/** A ring buffer which supports only one producer and one consumer */
+/** A ring buffer which supports only one producer and one consumer (support multi buffer flight) */
 struct SAL_RINGBUF_S
 {
     SAL_RINGBUF_CELL_HANDLE buf;            /**< pointer to the start of the ring buffer */
@@ -51,6 +51,26 @@ struct SAL_RINGBUF_S
     bool                    read_locking;   /**< indicates whether consumer is locking the ring buffer */
 };
 
+/** private functions */
+void HLGIH_SAL_RingBuf_HeadInc(SAL_RINGBUF_HANDLE const self);
+void HLGIH_SAL_RingBuf_TailInc(SAL_RINGBUF_HANDLE const self);
+void HLGIH_SAL_RingBuf_RdposInc(SAL_RINGBUF_HANDLE const self);
+
+/** ------------------------------------------------------------------------ */
+/**
+ * @brief  HLGIH_SAL_RingBuf_Create
+ *         Create a ringbuf object with the given length and payload size.
+ *
+ * @param[out]  rb                Ringbuf handle object.
+ * @param[in]   len               Specifies the ringbuf length.
+ * @param[in]   payload_size      Specifies the payload size, in bytes.
+ * 
+ *
+ * @return
+ *
+ * @retval false                if operation failed
+ * @retval true                 if operation succeeded
+ */
 bool HLGIH_SAL_RingBuf_Create(SAL_RINGBUF_HANDLE* rb, const uint32_t len, const uint32_t payload_size)
 {
     if((NULL == rb) || (len < 2) || (len > HLGIH_SAL_RINGBUF_MAX_LENGTH) || (payload_size < 1) || (payload_size > HLGIH_SAL_RINGBUF_MAX_PAYLOAD_SIZE))
@@ -120,6 +140,18 @@ bool HLGIH_SAL_RingBuf_Create(SAL_RINGBUF_HANDLE* rb, const uint32_t len, const 
     return (0 == errs);
 }
 
+/** ------------------------------------------------------------------------ */
+/**
+ * @brief  HLGIH_SAL_RingBuf_Release
+ *         Release a ringbuf object, all memories will be freed.
+ *
+ * @param[in]  self               Ringbuf handle object.
+ *
+ * @return
+ *
+ * @retval false                if operation failed
+ * @retval true                 if operation succeeded
+ */
 bool HLGIH_SAL_RingBuf_Release(SAL_RINGBUF_HANDLE const self)
 {
     if(NULL != self)
@@ -141,13 +173,36 @@ bool HLGIH_SAL_RingBuf_Release(SAL_RINGBUF_HANDLE const self)
     return true;
 }
 
-
+/** ------------------------------------------------------------------------ */
+/**
+ * @brief  HLGIH_SAL_RingBuf_IsEmpty
+ *         Check if the ringbuf is empty.
+ *
+ * @param[in]  self               Ringbuf handle object.
+ *
+ * @return
+ *
+ * @retval false                if operation failed
+ * @retval true                 if operation succeeded
+ */
 bool HLGIH_SAL_RingBuf_IsEmpty(SAL_RINGBUF_HANDLE const self)
 {
     // return (self->head == self->tail);
     return (self->head == self->rdpos);
 }
 
+/** ------------------------------------------------------------------------ */
+/**
+ * @brief  HLGIH_SAL_RingBuf_IsFull
+ *         Check if the ringbuf is full.
+ *
+ * @param[in]  self               Ringbuf handle object.
+ *
+ * @return
+ *
+ * @retval false                if operation failed
+ * @retval true                 if operation succeeded
+ */
 bool HLGIH_SAL_RingBuf_IsFull(SAL_RINGBUF_HANDLE const self)
 {
     ringbuf_index_t head = self->head + 1U;
@@ -158,6 +213,18 @@ bool HLGIH_SAL_RingBuf_IsFull(SAL_RINGBUF_HANDLE const self)
     return (head == self->tail);
 }
 
+/** ------------------------------------------------------------------------ */
+/**
+ * @brief  HLGIH_SAL_RingBuf_Clear
+ *         Clear the ringbuf content, but won't release any buffers.
+ *
+ * @param[in]  self               Ringbuf handle object.
+ *
+ * @return
+ *
+ * @retval false                if operation failed
+ * @retval true                 if operation succeeded
+ */
 bool HLGIH_SAL_RingBuf_Clear(SAL_RINGBUF_HANDLE const self)
 {
     // pthread_mutex_lock(&(self->rdmtx));
@@ -166,6 +233,15 @@ bool HLGIH_SAL_RingBuf_Clear(SAL_RINGBUF_HANDLE const self)
     // pthread_mutex_unlock(&(self->rdmtx));
 }
 
+/** ------------------------------------------------------------------------ */
+/**
+ * @brief  HLGIH_SAL_RingBuf_HeadInc
+ *         Increase the ringbuf head position by 1
+ *
+ * @param[in]  self               Ringbuf handle object.
+ *
+ * @return
+ */
 void HLGIH_SAL_RingBuf_HeadInc(SAL_RINGBUF_HANDLE const self)
 {
     ringbuf_index_t head = self->head + 1U;
@@ -177,6 +253,15 @@ void HLGIH_SAL_RingBuf_HeadInc(SAL_RINGBUF_HANDLE const self)
     self->head = head;
 }
 
+/** ------------------------------------------------------------------------ */
+/**
+ * @brief  HLGIH_SAL_RingBuf_TailInc
+ *         Increase the ringbuf tail position by 1
+ *
+ * @param[in]  self               Ringbuf handle object.
+ *
+ * @return
+ */
 void HLGIH_SAL_RingBuf_TailInc(SAL_RINGBUF_HANDLE const self)
 {
     ringbuf_index_t tail = self->tail;
@@ -189,6 +274,15 @@ void HLGIH_SAL_RingBuf_TailInc(SAL_RINGBUF_HANDLE const self)
     self->tail = tail;
 }
 
+/** ------------------------------------------------------------------------ */
+/**
+ * @brief  HLGIH_SAL_RingBuf_RdposInc
+ *         Increase the ringbuf read position by 1
+ *
+ * @param[in]  self               Ringbuf handle object.
+ *
+ * @return
+ */
 void HLGIH_SAL_RingBuf_RdposInc(SAL_RINGBUF_HANDLE const self)
 {
     ringbuf_index_t rdpos = self->rdpos;
@@ -201,6 +295,21 @@ void HLGIH_SAL_RingBuf_RdposInc(SAL_RINGBUF_HANDLE const self)
     self->rdpos = rdpos;
 }
 
+/** ------------------------------------------------------------------------ */
+/**
+ * @brief  HLGIH_SAL_RingBuf_GetWriteCell
+ *         Get a ringbuf cell object for writing, could fail if ringbuf is full even after timeout.
+ *
+ * @param[in]  self              Ringbuf handle object.
+ * @param[in]  timeout_us        Specifies the timeout in us to wait (if ringbuf is full) before unblocking, will return immediately if timeout_us <= 0.
+ * @param[out] el                The pointer to SAL_RINGBUF_CELL_HANDLE which is returned to producer. 
+ * 
+ *
+ * @return
+ *
+ * @retval false                if operation failed
+ * @retval true                 if operation succeeded
+ */
 bool HLGIH_SAL_RingBuf_GetWriteCell(SAL_RINGBUF_HANDLE const self, const int64_t timeout_us, SAL_RINGBUF_CELL_HANDLE* const el)
 {
     if(NULL == self || NULL == el)
@@ -268,6 +377,20 @@ bool HLGIH_SAL_RingBuf_GetWriteCell(SAL_RINGBUF_HANDLE const self, const int64_t
 
 }
 
+/** ------------------------------------------------------------------------ */
+/**
+ * @brief  HLGIH_SAL_RingBuf_ReturnWriteCell
+ *         Return the SAL_RINGBUF_CELL_HANDLE acquired by HLGIH_SAL_RingBuf_GetWriteCell.
+ *
+ * @param[in]  self              Ringbuf handle object.
+ * @param[out] el                The SAL_RINGBUF_CELL_HANDLE acquired by HLGIH_SAL_RingBuf_GetWriteCell. 
+ * 
+ *
+ * @return
+ *
+ * @retval false                if operation failed
+ * @retval true                 if operation succeeded
+ */
 bool HLGIH_SAL_RingBuf_ReturnWriteCell(SAL_RINGBUF_HANDLE const self, SAL_RINGBUF_CELL_HANDLE const el)
 {
     if(NULL == self || NULL == el)
@@ -299,6 +422,21 @@ bool HLGIH_SAL_RingBuf_ReturnWriteCell(SAL_RINGBUF_HANDLE const self, SAL_RINGBU
     return true;
 }
 
+/** ------------------------------------------------------------------------ */
+/**
+ * @brief  HLGIH_SAL_RingBuf_GetReadCell
+ *         Get a ringbuf cell object for reading, could fail if ringbuf is empty even after timeout.
+ *
+ * @param[in]  self              Ringbuf handle object.
+ * @param[in]  timeout_us        Specifies the timeout in us to wait (if ringbuf is empty) before unblocking, will return immediately if timeout_us <= 0.
+ * @param[out] el                The pointer to SAL_RINGBUF_CELL_HANDLE which is returned to consumer.
+ * 
+ *
+ * @return
+ *
+ * @retval false                if operation failed
+ * @retval true                 if operation succeeded
+ */
 bool HLGIH_SAL_RingBuf_GetReadCell(SAL_RINGBUF_HANDLE const self, const int64_t timeout_us, SAL_RINGBUF_CELL_HANDLE* const el)
 {
     if(NULL == self || NULL == el)
@@ -367,6 +505,20 @@ bool HLGIH_SAL_RingBuf_GetReadCell(SAL_RINGBUF_HANDLE const self, const int64_t 
     }
 }
 
+/** ------------------------------------------------------------------------ */
+/**
+ * @brief  HLGIH_SAL_RingBuf_ReturnReadCell
+ *         Return the SAL_RINGBUF_CELL_HANDLE acquired by HLGIH_SAL_RingBuf_GetReadCell.
+ *
+ * @param[in]  self              Ringbuf handle object.
+ * @param[out] el                The SAL_RINGBUF_CELL_HANDLE acquired by HLGIH_SAL_RingBuf_GetReadCell. 
+ * 
+ *
+ * @return
+ *
+ * @retval false                if operation failed
+ * @retval true                 if operation succeeded
+ */
 bool HLGIH_SAL_RingBuf_ReturnReadCell(SAL_RINGBUF_HANDLE const self, SAL_RINGBUF_CELL_HANDLE const el)
 {
     if(NULL == self || NULL == el)
@@ -399,8 +551,20 @@ bool HLGIH_SAL_RingBuf_ReturnReadCell(SAL_RINGBUF_HANDLE const self, SAL_RINGBUF
     return true;
 }
 
-
-/*..........................................................................*/
+/** ------------------------------------------------------------------------ */
+/**
+ * @brief  HLGIH_SAL_RingBuf_GetFreeSlotsCount
+ *         Return the total count of cells available for writing
+ *
+ * @param[in]  self              Ringbuf handle object.
+ * @param[out] count             The total count of cells available for writing
+ * 
+ *
+ * @return
+ *
+ * @retval false                if operation failed
+ * @retval true                 if operation succeeded
+ */
 bool HLGIH_SAL_RingBuf_GetFreeSlotsCount(SAL_RINGBUF_HANDLE const self, uint32_t* count)
 {
     ringbuf_index_t head = self->head;
