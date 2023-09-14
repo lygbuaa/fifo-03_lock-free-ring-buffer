@@ -42,8 +42,10 @@ struct SAL_RINGBUF_S
     SAL_RINGBUF_CELL_HANDLE buf;            /**< pointer to the start of the ring buffer */
     ringbuf_index_t         end;            /**< offset of the end of the ring buffer */
     ringbuf_index_t         head;           /**< offset to where next cell will be write */
-    ringbuf_index_t         tail;           /**< offset of where next cell will be read */
-    pthread_mutex_t         mutex;          /**< prevent race conditions when ring buffer is full or empty */
+    ringbuf_index_t         tail;           /**< offset of where the cell has done read */
+    ringbuf_index_t         rdpos;          /**< offset of where next cell will be read */
+    pthread_mutex_t         rdmtx;          /**< read mutex */
+    pthread_mutex_t         wtmtx;          /**< write mutex */
     pthread_cond_t          cond;           /**< notify the other worker until some condition is true */
     bool                    write_locking;  /**< indicates whether producer is locking the ring buffer */
     bool                    read_locking;   /**< indicates whether consumer is locking the ring buffer */
@@ -68,6 +70,7 @@ bool HLGIH_SAL_RingBuf_Create(SAL_RINGBUF_HANDLE* rb, const uint32_t len, const 
     SAL_RINGBUF_HANDLE const self = *rb;
     self->head = 0;
     self->tail = 0;
+    self->rdpos = 0;
     self->end = 0;
 
     /** allocate ringbuf cells */
@@ -79,7 +82,8 @@ bool HLGIH_SAL_RingBuf_Create(SAL_RINGBUF_HANDLE* rb, const uint32_t len, const 
     }
 
     self->end = len;
-    self->mutex = (pthread_mutex_t)PTHREAD_MUTEX_INITIALIZER;
+    self->rdmtx = (pthread_mutex_t)PTHREAD_MUTEX_INITIALIZER;
+    self->wtmtx = (pthread_mutex_t)PTHREAD_MUTEX_INITIALIZER;
     self->cond = (pthread_cond_t)PTHREAD_COND_INITIALIZER;
     pthread_condattr_t attr;
     pthread_condattr_init(&attr);
@@ -140,7 +144,8 @@ bool HLGIH_SAL_RingBuf_Release(SAL_RINGBUF_HANDLE const self)
 
 bool HLGIH_SAL_RingBuf_IsEmpty(SAL_RINGBUF_HANDLE const self)
 {
-    return (self->head == self->tail);
+    // return (self->head == self->tail);
+    return (self->head == self->rdpos);
 }
 
 bool HLGIH_SAL_RingBuf_IsFull(SAL_RINGBUF_HANDLE const self)
@@ -155,9 +160,45 @@ bool HLGIH_SAL_RingBuf_IsFull(SAL_RINGBUF_HANDLE const self)
 
 bool HLGIH_SAL_RingBuf_Clear(SAL_RINGBUF_HANDLE const self)
 {
-    pthread_mutex_lock(&(self->mutex));
+    // pthread_mutex_lock(&(self->rdmtx));
     self->tail = self->head;
-    pthread_mutex_unlock(&(self->mutex));
+    self->rdpos = self->head;
+    // pthread_mutex_unlock(&(self->rdmtx));
+}
+
+void HLGIH_SAL_RingBuf_HeadInc(SAL_RINGBUF_HANDLE const self)
+{
+    ringbuf_index_t head = self->head + 1U;
+    if (head == self->end)
+    {
+        head = 0U;
+    }
+    /** update the head to next index */
+    self->head = head;
+}
+
+void HLGIH_SAL_RingBuf_TailInc(SAL_RINGBUF_HANDLE const self)
+{
+    ringbuf_index_t tail = self->tail;
+    ++tail;
+    if (tail == self->end)
+    {
+        tail = 0U;
+    }
+    /** update the tail to next index */
+    self->tail = tail;
+}
+
+void HLGIH_SAL_RingBuf_RdposInc(SAL_RINGBUF_HANDLE const self)
+{
+    ringbuf_index_t rdpos = self->rdpos;
+    ++rdpos;
+    if (rdpos == self->end)
+    {
+        rdpos = 0U;
+    }
+    /** update the rdpos to next index */
+    self->rdpos = rdpos;
 }
 
 bool HLGIH_SAL_RingBuf_GetWriteCell(SAL_RINGBUF_HANDLE const self, const int64_t timeout_us, SAL_RINGBUF_CELL_HANDLE* const el)
@@ -178,6 +219,13 @@ bool HLGIH_SAL_RingBuf_GetWriteCell(SAL_RINGBUF_HANDLE const self, const int64_t
             *el = NULL;
             return false; 
         }
+        /** avoid multi producer dead-locking */
+        if(self->write_locking)
+        {
+            LOGPF("please call ReturnWriteCell first.");
+            *el = NULL;
+            return false; 
+        }
         struct timespec now;
         /** use CLOCK_MONOTONIC instead of CLOCK_REALTIME, in case of UTC time sync */
         clock_gettime(CLOCK_MONOTONIC, &now);
@@ -186,16 +234,20 @@ bool HLGIH_SAL_RingBuf_GetWriteCell(SAL_RINGBUF_HANDLE const self, const int64_t
         now.tv_sec += timeout_sec_part;
         now.tv_nsec += timeout_nsec_part;
         // LOGPF("HLGIH_SAL_RingBuf_GetWriteCell timeout: %ld.%ld", timeout_sec_part, timeout_nsec_part);
-        pthread_mutex_lock(&(self->mutex));
+        // LOGPF("write lock-1");
+        pthread_mutex_lock(&(self->wtmtx));
+        // LOGPF("write lock-2");
         self->write_locking = true;
-        pthread_cond_timedwait(&(self->cond), &(self->mutex), &now);
+        pthread_cond_timedwait(&(self->cond), &(self->wtmtx), &now);
 
         /** check status again, if still full, there is no need to call RingBuf_ReturnWriteCell() */
         if(HLGIH_SAL_RingBuf_IsFull(self))
         {
             *el = NULL;
             self->write_locking = false;
-            pthread_mutex_unlock(&(self->mutex));
+            // LOGPF("write unlock-1");
+            pthread_mutex_unlock(&(self->wtmtx));
+            // LOGPF("write unlock-2");
             LOGPF("ringbuf is full after timeout %d(us)", timeout_us);
             return false; 
         }
@@ -223,27 +275,26 @@ bool HLGIH_SAL_RingBuf_ReturnWriteCell(SAL_RINGBUF_HANDLE const self, SAL_RINGBU
         LOGPF("invalid argument");
         return false;
     }
-    ringbuf_index_t head = self->head + 1U;
-    if (head == self->end)
-    {
-        head = 0U;
-    }
-    /** update the head to next index, and release the mutex if empty */
-    self->head = head;
+
+    HLGIH_SAL_RingBuf_HeadInc(self);
 
     /** unlock mutex */
     if(self->write_locking)
     {
         self->write_locking = false;
-        pthread_mutex_unlock(&(self->mutex));
+        // LOGPF("write return lock-1");
+        pthread_mutex_unlock(&(self->wtmtx));
+        // LOGPF("write return lock-2");
     }
 
     /** notify the consumer */
     if(self->read_locking)
     {
-        pthread_mutex_lock(&(self->mutex));
+        // LOGPF("write notify read-1");
+        pthread_mutex_lock(&(self->rdmtx));
         pthread_cond_signal(&(self->cond));
-        pthread_mutex_unlock(&(self->mutex));
+        pthread_mutex_unlock(&(self->rdmtx));
+        // LOGPF("write notify read-2");
     }
     return true;
 }
@@ -266,6 +317,13 @@ bool HLGIH_SAL_RingBuf_GetReadCell(SAL_RINGBUF_HANDLE const self, const int64_t 
             LOGPF("ringbuf is empty");
             return false;
         }
+        /** avoid multi consumer dead-locking */
+        if(self->read_locking)
+        {
+            LOGPF("please call ReturnReadCell first.");
+            *el = NULL;
+            return false; 
+        }
         struct timespec now;
         /** use CLOCK_MONOTONIC instead of CLOCK_REALTIME, in case of UTC time jitter */
         clock_gettime(CLOCK_MONOTONIC, &now);
@@ -274,28 +332,37 @@ bool HLGIH_SAL_RingBuf_GetReadCell(SAL_RINGBUF_HANDLE const self, const int64_t 
         now.tv_sec += timeout_sec_part;
         now.tv_nsec += timeout_nsec_part;
         // LOGPF("HLGIH_SAL_RingBuf_GetReadCell timeout: %ld.%ld", timeout_sec_part, timeout_nsec_part);
-        pthread_mutex_lock(&(self->mutex));
+        // LOGPF("read lock-1");
+        pthread_mutex_lock(&(self->rdmtx));
+        // LOGPF("read lock-2");
         self->read_locking = true;
-        pthread_cond_timedwait(&(self->cond), &(self->mutex), &now);
+        pthread_cond_timedwait(&(self->cond), &(self->rdmtx), &now);
 
         /** check status again */
         if(HLGIH_SAL_RingBuf_IsEmpty(self))
         {
             *el = NULL;
             self->read_locking = false;
-            pthread_mutex_unlock(&(self->mutex));
+            // LOGPF("read unlock-1");
+            pthread_mutex_unlock(&(self->rdmtx));
+            // LOGPF("read unlock-2");
             LOGPF("ringbuf is empty after timeout %d(us)", timeout_us);
             return false; 
         }
         else
         {
-            *el = &(self->buf[self->tail]);
+            // *el = &(self->buf[self->tail]);
+            *el = &(self->buf[self->rdpos]);
+            HLGIH_SAL_RingBuf_RdposInc(self);
             return true;
         }
     }
     else
     {
-        *el = &(self->buf[self->tail]);
+        
+        // *el = &(self->buf[self->tail]);
+        *el = &(self->buf[self->rdpos]);
+        HLGIH_SAL_RingBuf_RdposInc(self);
         return true;
     }
 }
@@ -307,28 +374,26 @@ bool HLGIH_SAL_RingBuf_ReturnReadCell(SAL_RINGBUF_HANDLE const self, SAL_RINGBUF
         LOGPF("invalid argument");
         return false;
     }
-    ringbuf_index_t tail = self->tail;
-    ++tail;
-    if (tail == self->end)
-    {
-        tail = 0U;
-    }
-    /** update the tail to next index */
-    self->tail = tail;
+
+    HLGIH_SAL_RingBuf_TailInc(self);
 
     /** unlock mutex */
     if(self->read_locking)
     {
         self->read_locking = false;
-        pthread_mutex_unlock(&(self->mutex));
+        // LOGPF("read return lock-1");
+        pthread_mutex_unlock(&(self->rdmtx));
+        // LOGPF("read return lock-2");
     }
 
     /** notify the producer */
     if(self->write_locking)
     {
-        pthread_mutex_lock(&(self->mutex));
+        // LOGPF("read notify write-1");
+        pthread_mutex_lock(&(self->wtmtx));
         pthread_cond_signal(&(self->cond));
-        pthread_mutex_unlock(&(self->mutex));
+        pthread_mutex_unlock(&(self->wtmtx));
+        // LOGPF("read notify write-2");
     }
 
     return true;

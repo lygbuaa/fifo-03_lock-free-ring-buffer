@@ -52,7 +52,11 @@ void TEST_fail_(char const *cond, char const *module, int line);
 /** test ringbuf with single thread */
 void TEST_single_thread(void);
 /** test ringbuf with multi thread */
-void TEST_multi_thread(void);
+void TEST_single_producer_single_consumer(void);
+/** test ringbuf multi producer and multi consumer */
+void TEST_single_producer_multi_consumer(void);
+/** test ringbuf multi flight */
+void TEST_multi_flight();
 
 #ifdef __cplusplus
 }

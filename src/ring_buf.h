@@ -35,6 +35,7 @@ typedef uint8_t  ringbuf_payload_t;
 typedef struct hlgih_SAL_RINGBUF_CELL_S
 {
     uint32_t magic;                     /**< magic number to identify a ringbuf cell, default to 0x72696e67 */
+    uint32_t index;                     /**< index of this cell */
     uint32_t size;                      /**< total size of the payload, in bytes */
     uint32_t len;                       /**< used bytes of the payload */
     int64_t timestamp;                  /**< timestamp when the payload received */
@@ -54,6 +55,12 @@ bool HLGIH_SAL_RingBuf_IsEmpty(SAL_RINGBUF_HANDLE const self);
 bool HLGIH_SAL_RingBuf_IsFull(SAL_RINGBUF_HANDLE const self);
 
 bool HLGIH_SAL_RingBuf_Clear(SAL_RINGBUF_HANDLE const self);
+
+void HLGIH_SAL_RingBuf_HeadInc(SAL_RINGBUF_HANDLE const self);
+
+void HLGIH_SAL_RingBuf_TailInc(SAL_RINGBUF_HANDLE const self);
+
+void HLGIH_SAL_RingBuf_RdposInc(SAL_RINGBUF_HANDLE const self);
 
 bool HLGIH_SAL_RingBuf_GetWriteCell(SAL_RINGBUF_HANDLE const self, const int64_t timeout_us, SAL_RINGBUF_CELL_HANDLE* const el);
 

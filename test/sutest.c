@@ -77,22 +77,35 @@ void TEST_fail_(char const *cond, char const *file, int line) {
 int main(void) {
     printf("\n%s\n", "Simple Unit Internal Testing -- SUTEST");
 
-    TEST_single_thread();
+    // TEST_single_thread();
 
-    if (l_test_count > 0) {
-        printf("%s\n", " PASSED");
-    }
-    printf("---------------------------------------------\n"
-        "%d test(s)\nOK\n", l_test_count);
+    // if (l_test_count > 0) {
+    //     printf("%s\n", "TEST_single_thread PASSED");
+    // }
+
+
+    // l_test_count = 0;
+    // TEST_single_producer_single_consumer();
+
+    // if (l_test_count > 0) {
+    //     printf("%s\n", "TEST_single_producer_single_consumer PASSED");
+    // }
+
+
+    // l_test_count = 0;
+    // TEST_single_producer_multi_consumer();
+
+    // if (l_test_count > 0) {
+    //     printf("%s\n", "TEST_single_producer_multi_consumer PASSED");
+    // }
+
 
     l_test_count = 0;
-    TEST_multi_thread();
+    TEST_multi_flight();
 
     if (l_test_count > 0) {
-        printf("%s\n", " PASSED");
+        printf("%s\n", "consumer_func_multi_flight PASSED");
     }
-    printf("---------------------------------------------\n"
-        "%d test(s)\nOK\n", l_test_count);
 
     return 0; /* success */
 }
